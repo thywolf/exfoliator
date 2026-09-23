@@ -285,6 +285,7 @@ HTML = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entropy Oracle</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23d4af37'/%3E%3Ccircle cx='21' cy='12' r='10' fill='%23050510'/%3E%3C/svg%3E">
 <style>
 :root {{
   --bg: #050510;

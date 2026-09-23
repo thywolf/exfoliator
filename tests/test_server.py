@@ -33,6 +33,7 @@ def test_initial_page(t):
     for marker in (b'id="box"', b'id="go"', b'id="result"', b'id="stars"'):
         assert marker in r.data
     assert b'class="moon"' in r.data
+    assert b'rel="icon"' in r.data and b"data:image/svg+xml" in r.data
     assert b'class="big' not in r.data  # no answer before first submit
     assert r.headers["Cache-Control"].startswith("no-store")
 
