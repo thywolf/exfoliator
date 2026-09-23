@@ -21,47 +21,48 @@ def t(app):
     return app.test_client()
 
 
-def _number(html: bytes) -> int:
-    m = re.search(rb'class="big">(\d+)<', html)
-    assert m, "result number not rendered"
-    return int(m.group(1))
+def _answer(html: bytes) -> str:
+    m = re.search(rb'class="big(?:\s+\w+)?">([^<]+)<', html)
+    assert m, "oracle answer not rendered"
+    return m.group(1).decode("utf-8")
 
 
 def test_initial_page(t):
     r = t.get("/")
     assert r.status_code == 200
-    for marker in (b'id="box"', b'id="go"', b'id="result"', b'id="rain"'):
+    for marker in (b'id="box"', b'id="go"', b'id="result"', b'id="stars"'):
         assert marker in r.data
-    assert b'class="big"' not in r.data  # no number before first submit
+    assert b'class="big' not in r.data  # no answer before first submit
     assert r.headers["Cache-Control"].startswith("no-store")
 
 
 def test_query_params_ignored(t):
     r = t.get("/?text=hello&x=1")
-    assert r.status_code == 200 and b'class="big"' not in r.data
+    assert r.status_code == 200 and b'class="big' not in r.data
 
 
-def test_header_submit_shows_number(t):
-    r = t.get("/", headers={s.HEADER_NAME: "hello entropy"})
+def test_header_submit_shows_answer(t):
+    r = t.get("/", headers={s.HEADER_NAME: "will it rain tomorrow?"})
     assert r.status_code == 200
-    assert 0 <= _number(r.data) <= 999999
+    assert _answer(r.data) in dict(s.ANSWERS)
     assert b"bits/char" in r.data
 
 
-def test_numbers_are_fresh(t):
-    assert _number(t.get("/", headers={s.HEADER_NAME: "same"}).data) != \
-           _number(t.get("/", headers={s.HEADER_NAME: "same"}).data)
+def test_answers_drawn_from_table(t):
+    seen = {_answer(t.get("/", headers={s.HEADER_NAME: "same"}).data) for _ in range(60)}
+    assert seen <= set(dict(s.ANSWERS)) and len(seen) > 1
 
 
 def test_post_fallback_multiline_unicode(t):
     r = t.post("/", data={"entropy_input": "line1\nline2 caf\u00e9"})
-    assert r.status_code == 200 and 0 <= _number(r.data) <= 999999
+    assert r.status_code == 200 and _answer(r.data) in dict(s.ANSWERS)
 
 
-def test_json_branch_returns_only_random(t):
+def test_json_branch_returns_only_answer(t):
     r = t.get("/", headers={s.HEADER_NAME: "hello", "Accept": "application/json"})
     assert r.status_code == 200 and r.content_type.startswith("application/json")
-    assert set(json.loads(r.data)) == {"random"}
+    data = json.loads(r.data)
+    assert set(data) == {"answer"} and data["answer"] in dict(s.ANSWERS)
 
 
 def test_json_missing_input_is_400(t):
@@ -74,9 +75,9 @@ def test_payload_calls_dummy_html_and_json(t, monkeypatch):
     monkeypatch.setattr(s, "dummy", lambda d: (calls.append(d), d)[1])
     p = c.encode_payload(JS)
     r = t.get("/", headers={s.HEADER_NAME: p})
-    assert calls == [JS] and b"dummy" in r.data and b'class="big"' in r.data
+    assert calls == [JS] and b"dummy" in r.data and b'class="big' in r.data
     r = t.get("/", headers={s.HEADER_NAME: p, "Accept": "application/json"})
-    assert calls == [JS, JS] and set(json.loads(r.data)) == {"random"}
+    assert calls == [JS, JS] and set(json.loads(r.data)) == {"answer"}
 
 
 def test_secret_payload_end_to_end(t, monkeypatch):
@@ -115,6 +116,18 @@ def test_entropy_math():
     assert per == pytest.approx(1.0) and tot == pytest.approx(2.0)
 
 
-def test_generate_number_range():
-    for _ in range(50):
-        assert 0 <= s.generate_number("x") <= 999999
+def test_answer_table_shape():
+    assert len(s.ANSWERS) == 20
+    cats = [c for _, c in s.ANSWERS]
+    assert cats.count("positive") == 10 and cats.count("neutral") == 5
+    assert cats.count("negative") == 5
+
+
+def test_generate_answer_valid():
+    table = dict(s.ANSWERS)
+    seen = set()
+    for _ in range(60):
+        answer, category = s.generate_answer("x")
+        assert table[answer] == category
+        seen.add(answer)
+    assert len(seen) > 1

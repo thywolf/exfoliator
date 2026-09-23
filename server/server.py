@@ -1,13 +1,13 @@
 # server/server.py
-"""Entropy random-number server (single GET endpoint, header-transported input).
+"""Entropy oracle server (single GET endpoint, header-transported input).
 
 Web interaction (regular use):
-  1. GET the page (no header) -> empty textarea form.
-  2. User types text; JS shows Shannon entropy live.
-  3. User clicks "Generate a random number"; JS re-issues GET with the
+  1. GET the page (no header) -> empty question form.
+  2. User types a question; JS shows Shannon entropy of the text live.
+  3. User clicks "Ask the oracle"; JS re-issues GET with the
      textarea content in the ``X-Entropy-Input`` header (no URL query params).
-  4. Server mixes the text with fresh OS randomness (``secrets``), generates a
-     new random number on every click, and returns the SAME page with it shown.
+  4. Server mixes the text with fresh OS randomness (``secrets``), draws a
+     fresh oracle answer on every click, and returns the SAME page with it shown.
 
 Payload interaction (from client/client.py):
   Identical HTTP round-trip. If the header text starts with a base62 checksum
@@ -19,8 +19,8 @@ Payload interaction (from client/client.py):
   The returned webpage is identical to the regular web flow.
 
 Content negotiation: callers sending ``Accept: application/json`` (the python
-client) receive only ``{"random": N}`` instead of the HTML page; the entropy
-use, number draw and ``dummy()`` processing are identical.
+client) receive only ``{"answer": "..."}`` instead of the HTML page; the entropy
+use, answer draw and ``dummy()`` processing are identical.
 """
 import bz2
 import hashlib
@@ -72,18 +72,42 @@ def shannon_entropy(text: str) -> tuple[float, float]:
     return per_char, per_char * n
 
 
-def generate_number(text: str, lo: int = 0, hi: int = 999999) -> int:
-    """Derive a fresh random number from *text* as entropy source plus OS randomness.
+def draw_index(text: str, n: int) -> int:
+    """Fresh index in ``range(n)`` from *text* entropy plus OS randomness."""
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    mixed = hashlib.sha256(digest + secrets.token_bytes(32)).digest()
+    return int.from_bytes(mixed, "big") % n
 
-    SHA-256 of the text is mixed with 32 bytes from the OS CSPRNG
-    (``secrets`` -> ``os.urandom``) and hashed again; the 256-bit mixed digest
-    is mapped into [lo, hi] (modulo bias ~1e-71, negligible). Identical input
-    therefore yields a different number on every call, while the text still
-    contributes entropy to each draw.
-    """
-    text_digest = hashlib.sha256(text.encode("utf-8")).digest()
-    mixed = hashlib.sha256(text_digest + secrets.token_bytes(32)).digest()
-    return lo + int.from_bytes(mixed, "big") % (hi - lo + 1)
+
+# Original oracle phrasing (10 favorable / 5 neutral / 5 unfavorable).
+# Deliberately not the Mattel "Magic 8-Ball" wording or name.
+ANSWERS: tuple[tuple[str, str], ...] = (
+    ("It is certain.", "positive"),
+    ("Without a doubt.", "positive"),
+    ("The entropy aligns in your favor.", "positive"),
+    ("Yes -- all signs agree.", "positive"),
+    ("Most likely.", "positive"),
+    ("The currents say yes.", "positive"),
+    ("Count on it.", "positive"),
+    ("Fortune favors this path.", "positive"),
+    ("Outlook is bright.", "positive"),
+    ("The stars incline toward yes.", "positive"),
+    ("The mists have not cleared -- ask again.", "neutral"),
+    ("Concentrate, then ask once more.", "neutral"),
+    ("The oracle withholds its answer for now.", "neutral"),
+    ("Unclear. The patterns are still forming.", "neutral"),
+    ("Not yet decided -- time will tell.", "neutral"),
+    ("The signs say no.", "negative"),
+    ("Do not count on it.", "negative"),
+    ("The entropy scatters -- outlook is dark.", "negative"),
+    ("Very doubtful.", "negative"),
+    ("The currents turn against this.", "negative"),
+)
+
+
+def generate_answer(text: str) -> tuple[str, str]:
+    """Draw a fresh (answer, category) pair with *text* as entropy source."""
+    return ANSWERS[draw_index(text, len(ANSWERS))]
 
 
 # ------------------------------------------------------------- payload decode
@@ -226,7 +250,7 @@ HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Entropy random number</title>
+<title>Entropy Oracle</title>
 <style>
 :root {{
   --bg: #040705;
@@ -241,10 +265,15 @@ html, body {{ margin: 0; padding: 0; }}
 body {{
   min-height: 100vh; padding: 2.5rem 1rem 3rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--bg); color: var(--ink);
+  background:
+    radial-gradient(1200px 700px at 75% -10%, rgba(88, 40, 140, .28), transparent 60%),
+    radial-gradient(1000px 700px at 10% 110%, rgba(0, 90, 70, .18), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
   display: flex; align-items: flex-start; justify-content: center;
 }}
-#rain {{ position: fixed; inset: 0; width: 100%; height: 100%; opacity: .26; z-index: 0; }}
+#stars {{ position: fixed; inset: 0; width: 100%; height: 100%; opacity: .8; z-index: 0; }}
 .vignette {{
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(ellipse at 50% 32%, transparent 35%, rgba(0, 0, 0, .78) 100%);
@@ -310,9 +339,17 @@ button:disabled {{ opacity: .55; cursor: wait; }}
 }}
 .result-label {{ font-size: .7rem; letter-spacing: .3em; text-transform: uppercase; color: var(--brass); }}
 .big {{
-  font-size: 3.2rem; font-weight: 700; letter-spacing: .06em; line-height: 1.2;
+  font-size: 1.7rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4;
   color: var(--phos);
   text-shadow: 0 0 8px rgba(0, 255, 65, .8), 0 0 30px rgba(0, 255, 65, .45), 0 0 80px rgba(0, 255, 65, .25);
+}}
+.big.neutral {{
+  color: var(--brass);
+  text-shadow: 0 0 8px rgba(201, 162, 39, .8), 0 0 30px rgba(201, 162, 39, .4);
+}}
+.big.negative {{
+  color: #ff6b5e;
+  text-shadow: 0 0 8px rgba(255, 107, 94, .8), 0 0 30px rgba(255, 107, 94, .4);
 }}
 .result-meta {{ margin-top: .5rem; font-size: .78rem; color: var(--dim); }}
 .hint {{ color: var(--faint); font-size: .85rem; }}
@@ -321,43 +358,42 @@ code {{ color: var(--brass); background: rgba(201, 162, 39, .08); border: 1px so
 </style>
 </head>
 <body>
-<canvas id="rain" aria-hidden="true"></canvas>
+<canvas id="stars" aria-hidden="true"></canvas>
 <div class="vignette" aria-hidden="true"></div>
 <div class="card">
-<div class="overline">CSPRNG TERMINAL &middot; MMXXVI</div>
-<h1>Entropy Random Number</h1>
-<label for="box">Entropy source</label>
-<textarea id="box" placeholder="Paste or type a long text here...">{text}</textarea>
+<div class="overline">ENTROPY ORACLE &middot; MMXXVI</div>
+<h1>Entropy Oracle</h1>
+<label for="box">Your question</label>
+<textarea id="box" placeholder="Ask your question, then consult the oracle...">{text}</textarea>
 <div id="entropy">{entropy_line}</div>
-<button id="go" type="button">Generate a random number</button>
+<button id="go" type="button">Ask the oracle</button>
 <div id="result">{result_block}</div>
 </div>
 <script>
-(function rain() {{
+(function stars() {{
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const cv = document.getElementById('rain');
+  const cv = document.getElementById('stars');
   const ctx = cv.getContext('2d');
-  const glyphs = 'アイウエオカキクケコサシスセソ01ABCDEF$#*+=';
-  const px = 16;
-  let cols = 0, drops = [];
+  let W = 0, H = 0, pts = [];
   function size() {{
-    cv.width = innerWidth; cv.height = innerHeight;
-    cols = Math.ceil(cv.width / px);
-    drops = Array.from({{length: cols}}, () => Math.random() * -40);
-    ctx.font = px + 'px monospace';
+    cv.width = innerWidth; cv.height = innerHeight; W = cv.width; H = cv.height;
+    const n = Math.min(220, Math.floor(W * H / 9000));
+    pts = Array.from({{length: n}}, () => ({{x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.3 + 0.3, p: Math.random() * Math.PI * 2, s: 0.5 + Math.random() * 1.5}}));
   }}
   size(); addEventListener('resize', size);
+  let t = 0;
   (function tick() {{
     requestAnimationFrame(tick);
     if (document.hidden) return;
-    ctx.fillStyle = 'rgba(4, 7, 5, 0.09)';
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    for (let i = 0; i < cols; i++) {{
-      ctx.fillStyle = Math.random() < 0.025 ? '#d6ffe0' : '#00b32e';
-      ctx.fillText(glyphs[(Math.random() * glyphs.length) | 0], i * px, drops[i] * px);
-      if (drops[i] * px > cv.height && Math.random() > 0.976) drops[i] = 0;
-      drops[i]++;
+    t += 0.02;
+    ctx.fillStyle = '#040705';
+    ctx.fillRect(0, 0, W, H);
+    for (const q of pts) {{
+      ctx.globalAlpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * q.s + q.p));
+      ctx.fillStyle = q.r > 1.2 ? '#e8f5e9' : '#00b32e';
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 7); ctx.fill();
     }}
+    ctx.globalAlpha = 1;
   }})();
 }})();
 function scramble(el, final) {{
@@ -438,7 +474,7 @@ document.getElementById('go').addEventListener('click', async () => {{
 </html>"""
 
 
-def render_page(text: str, number=None, payload_note: str = "") -> str:
+def render_page(text: str, answer=None, category: str = "neutral", payload_note: str = "") -> str:
     import html as _html
 
     per, tot = shannon_entropy(text)
@@ -447,12 +483,12 @@ def render_page(text: str, number=None, payload_note: str = "") -> str:
         if text
         else ""
     )
-    if number is None:
-        result, style = '<span class="hint">Your number will appear here.</span>', "display:none"
+    if answer is None:
+        result, style = '<span class="hint">The oracle awaits your question.</span>', "display:none"
     else:
         result = (
-            '<div class="result-label">Your random number</div>'
-            f'<div class="big">{number}</div>'
+            '<div class="result-label">The oracle speaks</div>'
+            f'<div class="big {category}">{_html.escape(answer)}</div>'
             f'<div class="result-meta">Entropy: {per:.3f} bits/char, {tot:.1f} bits total ({len(text)} chars)</div>'
             + (f'<div class="result-meta">{payload_note}</div>' if payload_note else "")
         )
@@ -470,7 +506,7 @@ def render_page(text: str, number=None, payload_note: str = "") -> str:
 def wants_json() -> bool:
     """True when the caller asks for ``Accept: application/json``.
 
-    JSON callers (the python client) get only ``{"random": N}`` instead of
+    JSON callers (the python client) get only ``{"answer": "..."}`` instead of
     the HTML page; browsers (``Accept: */*``) keep getting the webpage.
     """
     return "application/json" in request.headers.get("Accept", "")
@@ -502,7 +538,7 @@ def create_app() -> Flask:
             if wants_json():
                 return jsonify({"error": f"missing input: send text in the {HEADER_NAME} header"}), 400
             return render_page("")
-        number = generate_number(text)
+        answer, category = generate_answer(text)
         note = ""
         json_str, _ = extract_payload(text)
         if json_str is not None:
@@ -513,8 +549,8 @@ def create_app() -> Flask:
             dummy(json_str)
             note = "<span class='note'>Client payload detected: decoded, decompressed and passed to <code>dummy()</code>.</span>"
         if wants_json():
-            return jsonify({"random": number})
-        return render_page(text, number, note)
+            return jsonify({"answer": answer})
+        return render_page(text, answer, category, note)
 
     return app
 

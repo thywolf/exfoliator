@@ -8,7 +8,7 @@ shortest one, plus a 6-char checksum word and one space separator.
 
 Full path: JSON string -> compress + base63-encode -> GET with the payload in
 the ``X-Entropy-Input`` header, ``Accept: application/json`` -> server
-decodes/decompresses, passes it to ``dummy()``, and returns ``{"random": N}``.
+decodes/decompresses, passes it to ``dummy()``, and returns ``{"answer": "..."}``.
 
 Prerequisites: the server must be running, e.g.::
 
@@ -59,7 +59,7 @@ def sample_2048() -> str:
 
 
 def transmit(data, server_url=DEFAULT_URL):
-    """Send *data* (JSON-serializable object or JSON string); return the random int."""
+    """Send *data* (JSON-serializable object or JSON string); return the oracle answer."""
     json_string = data if isinstance(data, str) else json.dumps(data)
     json.loads(json_string)  # fail fast on invalid JSON
     raw = len(json_string.encode("utf-8"))
@@ -89,7 +89,7 @@ def transmit(data, server_url=DEFAULT_URL):
         else:
             print("body does not decompress directly: scrambling layer holds")
     number = main(json_string, server_url=server_url)
-    print(f"server random number: {number}")
+    print(f"server answer: {number}")
     return number
 
 

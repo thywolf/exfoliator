@@ -22,9 +22,9 @@ def live_url():
     thread.join(timeout=5)
 
 
-def test_main_returns_int(live_url):
-    n = c.main(json.dumps({"live": True}), server_url=live_url)
-    assert isinstance(n, int) and 0 <= n <= 999999
+def test_main_returns_answer(live_url):
+    a = c.main(json.dumps({"live": True}), server_url=live_url)
+    assert isinstance(a, str) and a in dict(s.ANSWERS)
 
 
 def test_main_with_secret_fires_server_dummy(live_url, monkeypatch):
@@ -32,14 +32,14 @@ def test_main_with_secret_fires_server_dummy(live_url, monkeypatch):
     calls = []
     monkeypatch.setattr(s, "dummy", lambda d: (calls.append(d), d)[1])
     js = json.dumps({"secret": "roundtrip"})
-    n = c.main(js, server_url=live_url, secret=SECRET)
-    assert isinstance(n, int) and calls == [js]
+    a = c.main(js, server_url=live_url, secret=SECRET)
+    assert isinstance(a, str) and a in dict(s.ANSWERS) and calls == [js]
 
 
 def test_send_payload_html_variant(live_url):
     html = c.send_payload(c.encode_payload(json.dumps({"a": 1})),
                           server_url=live_url, accept_json=False)
-    assert isinstance(html, str) and 'class="big"' in html
+    assert isinstance(html, str) and 'class="big' in html
 
 
 def test_main_unreachable_raises():

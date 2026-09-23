@@ -1,14 +1,14 @@
-# AGENTS.md — Exfoliator
+# AGENTS.md — Exfoliator (oracle branch)
 
-Entropy-based random-number web app. Two components, one repo, managed with `uv`.
+Entropy-based oracle web app. Two components, one repo, managed with `uv`.
 Browser and python-client flows share one endpoint and must behave identically.
 
 ## Layout
 
 - `server/server.py` — Flask app. Single GET endpoint (GET + POST accepted on the
   same path; POST form field is only a fallback for header-unfriendly text).
-  Renders the page, computes entropy, draws the number, detects client payloads
-  and calls `dummy()`.
+  Renders the page, computes entropy, draws the oracle answer, detects client
+  payloads and calls `dummy()`.
 - `client/client.py` — importable module (`client.main(json_string, ...)`).
   Compresses + encodes a JSON string and GETs it to the server.
 - `client/example.py` — runnable demo incl. the 2048-byte compression showcase.
@@ -37,9 +37,9 @@ Copy `.env.example` (or `server/.env.example`) to `.env`; never commit `.env`.
 - **No URL query parameters, ever.** Input travels in the `X-Entropy-Input`
   header (browser JS and python client) or, as fallback, the `entropy_input`
   form field. `request.args` must stay unused.
-- **Web and payload flows behave identically**: same entropy calc, same number
+- **Web and payload flows behave identically**: same entropy calc, same answer
   draw, same response. Only the representation differs (HTML page vs
-  `{"random": N}` for `Accept: application/json`).
+  `{"answer": "..."}` for `Accept: application/json`).
 - **Wire format is frozen** — client and server implement it independently, so
   these must stay in sync on both sides:
   - base63 alphabet order: `a-z A-Z 0-9` + space (space = value 62);

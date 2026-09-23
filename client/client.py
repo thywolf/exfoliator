@@ -4,7 +4,7 @@
 Usage from another script::
 
     import client.client as client  # or add client/ to sys.path and ``import client``
-    number = client.main('{"hello": "world"}')  # -> int, server sends {"random": N}
+    answer = client.main('{"hello": "world"}')  # -> str, server sends {"answer": "..."}
 
 Only the allowed charset is used on the wire: payload body ``a-z A-Z 0-9``
 plus space (base63); leading checksum word ``a-z A-Z 0-9`` only (base62).
@@ -236,11 +236,11 @@ def _server_path(path: str | None) -> str:
 
 def send_payload(payload: str, server_url: str | None = None,
                  path: str | None = None, timeout: int = 15,
-                 accept_json: bool = True) -> int | str:
+                 accept_json: bool = True) -> str:
     """GET *server_url+path* with the payload in the header (no query params).
 
     With ``accept_json=True`` (default) asks for ``Accept: application/json``
-    and returns the server's random number as int. With ``accept_json=False``
+    and returns the server's oracle answer as str. With ``accept_json=False``
     returns the full webpage HTML (regular browser-style response).
     """
     base = (server_url or os.environ.get("SERVER_URL", "http://127.0.0.1:5000")).rstrip("/")
@@ -252,14 +252,14 @@ def send_payload(payload: str, server_url: str | None = None,
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = resp.read().decode("utf-8", "replace")
     if accept_json:
-        return int(json.loads(body)["random"])
+        return str(json.loads(body)["answer"])
     return body
 
 
 def main(json_string: str, server_url: str | None = None,
          path: str | None = None, timeout: int = 15,
-         accept_json: bool = True, secret: str | None = None) -> int | str:
-    """Compress, encode and send *json_string*; return the server's random int.
+         accept_json: bool = True, secret: str | None = None) -> str:
+    """Compress, encode and send *json_string*; return the server's oracle answer.
 
     *secret* (else the ``PAYLOAD_SECRET`` env var) XOR-scrambles the compressed
     bytes before encoding; the server must be configured with the same secret.
