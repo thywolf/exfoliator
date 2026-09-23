@@ -1,0 +1,27 @@
+# uv / virtualenv
+.venv/
+
+# python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# local secrets and config (examples with the same names ARE committed)
+.env
+
+# build artifacts
+dist/
+build/
+*.egg-info/
+
+# logs
+*.log
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
