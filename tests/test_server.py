@@ -128,10 +128,11 @@ def test_entropy_math():
 
 
 def test_answer_table_shape():
-    assert len(s.ANSWERS) == 20
+    assert len(s.ANSWERS) == 40
     cats = [c for _, c in s.ANSWERS]
-    assert cats.count("positive") == 10 and cats.count("neutral") == 5
-    assert cats.count("negative") == 5
+    assert cats.count("positive") == 20 and cats.count("neutral") == 10
+    assert cats.count("negative") == 10
+    assert len({t for t, _ in s.ANSWERS}) == 40  # all phrasings unique
 
 
 def test_generate_answer_valid():
