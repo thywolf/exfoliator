@@ -287,27 +287,34 @@ HTML = """<!doctype html>
 <title>Entropy Oracle</title>
 <style>
 :root {{
-  --bg: #040705;
-  --card: rgba(8, 13, 10, .88);
-  --ink: #d7ffe2; --dim: #7fa88d; --faint: #3f5a49;
-  --phos: #00ff41; --phos-dim: #00b32e;
-  --brass: #c9a227; --copper: #b87333;
-  --line: #1d3327; --field: #020402;
+  --bg: #050510;
+  --card: rgba(10, 10, 24, .88);
+  --ink: #e9e6da; --dim: #9a94a8; --faint: #57536a;
+  --gold: #d4af37; --gold-dim: #8a6f1f; --copper: #b87333;
+  --aurora: #8dffb0; --ember: #ff6b5e; --moon: #e8e4d8;
+  --line: #2a2640; --field: #07070f;
 }}
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; padding: 0; }}
 body {{
   min-height: 100vh; padding: 2.5rem 1rem 3rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
   background:
-    radial-gradient(1200px 700px at 75% -10%, rgba(88, 40, 140, .28), transparent 60%),
-    radial-gradient(1000px 700px at 10% 110%, rgba(0, 90, 70, .18), transparent 60%),
+    radial-gradient(1100px 650px at 78% -10%, rgba(88, 40, 140, .32), transparent 60%),
+    radial-gradient(900px 650px at 8% 108%, rgba(20, 90, 110, .2), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
   display: flex; align-items: flex-start; justify-content: center;
 }}
 #stars {{ position: fixed; inset: 0; width: 100%; height: 100%; opacity: .8; z-index: 0; }}
+.moon {{
+  position: fixed; top: 6%; right: 9%; width: 110px; height: 110px; z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fdfbf0, #d9d4c0 60%, #a8a294 100%);
+  box-shadow: 0 0 40px rgba(253, 251, 240, .35), 0 0 120px rgba(212, 175, 55, .25);
+  opacity: .9;
+}}
 .vignette {{
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(ellipse at 50% 32%, transparent 35%, rgba(0, 0, 0, .78) 100%);
@@ -316,83 +323,80 @@ body {{
   position: relative; z-index: 2; width: 100%; max-width: 660px;
   background: var(--card);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(201, 162, 39, .5); border-radius: 6px;
+  border: 1px solid rgba(212, 175, 55, .45); border-radius: 6px;
   padding: 2rem 2rem 1.6rem;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8), 0 0 45px rgba(0, 255, 65, .07), 0 30px 80px rgba(0, 0, 0, .65);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8), 0 0 60px rgba(88, 40, 140, .25), 0 30px 80px rgba(0, 0, 0, .65);
 }}
 .card::before {{
   content: ""; display: block; height: 3px; margin: -2rem -2rem 1.6rem;
-  background: linear-gradient(90deg, transparent, var(--brass) 20%, var(--copper) 50%, var(--brass) 80%, transparent);
+  background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--copper) 50%, var(--gold) 80%, transparent);
 }}
-.card::after {{
-  content: ""; position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .022) 0 1px, transparent 1px 3px);
-}}
-.overline {{ font-size: .68rem; letter-spacing: .35em; color: var(--brass); margin-bottom: .6rem; }}
+.overline {{ font-size: .68rem; letter-spacing: .35em; color: var(--gold); margin-bottom: .6rem; }}
 h1 {{
   margin: 0 0 1.3rem;
   font-family: Didot, "Bodoni MT", "Playfair Display", Georgia, serif;
-  font-size: 2rem; font-weight: 700; letter-spacing: .01em; color: #f2e7c9;
-  text-shadow: 0 0 24px rgba(201, 162, 39, .3);
+  font-size: 2.1rem; font-weight: 700; letter-spacing: .01em; color: #f5edd6;
+  text-shadow: 0 0 24px rgba(212, 175, 55, .35);
 }}
-label {{ display: block; font-size: .75rem; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); margin-bottom: .45rem; }}
-label::after {{ content: "_"; color: var(--phos); animation: blink 1.1s steps(1) infinite; }}
-@keyframes blink {{ 50% {{ opacity: 0; }} }}
+label {{ display: block; font-size: .78rem; letter-spacing: .24em; text-transform: uppercase; color: var(--dim); margin-bottom: .45rem; }}
 textarea {{
   width: 100%; min-height: 150px; resize: vertical;
-  font: inherit; font-size: .88rem; line-height: 1.6; color: var(--ink);
-  caret-color: var(--phos);
+  font-family: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  font-size: 1rem; line-height: 1.7; color: var(--ink);
+  caret-color: var(--gold);
   background: var(--field);
   border: 1px solid var(--line); border-radius: 4px;
   padding: .8rem .95rem; outline: none;
   box-shadow: inset 0 0 30px rgba(0, 0, 0, .7);
   transition: border-color .15s, box-shadow .15s;
 }}
-textarea:focus {{ border-color: var(--phos-dim); box-shadow: inset 0 0 30px rgba(0, 0, 0, .7), 0 0 0 1px rgba(0, 255, 65, .25), 0 0 22px rgba(0, 255, 65, .12); }}
-textarea::placeholder {{ color: var(--faint); }}
-#entropy {{ margin-top: .55rem; font-size: .8rem; color: var(--dim); min-height: 1.2em; }}
-#entropy:not(:empty)::before {{ content: "// "; color: var(--faint); }}
+textarea:focus {{ border-color: var(--gold-dim); box-shadow: inset 0 0 30px rgba(0, 0, 0, .7), 0 0 0 1px rgba(212, 175, 55, .3), 0 0 22px rgba(212, 175, 55, .15); }}
+textarea::placeholder {{ color: var(--faint); font-style: italic; }}
+#entropy {{ margin-top: .55rem; font-size: .88rem; font-style: italic; color: var(--dim); min-height: 1.2em; }}
 button {{
   margin-top: 1.1rem; width: 100%; padding: .9rem 1rem;
-  font: inherit; font-size: .92rem; font-weight: 700;
+  font-family: inherit; font-size: .95rem; font-weight: 700;
   letter-spacing: .22em; text-transform: uppercase;
-  color: var(--phos);
-  background: linear-gradient(180deg, rgba(0, 255, 65, .08), rgba(0, 255, 65, .02));
-  border: 1px solid var(--phos-dim); border-radius: 4px; cursor: pointer;
-  text-shadow: 0 0 12px rgba(0, 255, 65, .5);
-  box-shadow: inset 0 0 18px rgba(0, 255, 65, .06);
+  color: var(--gold);
+  background: linear-gradient(180deg, rgba(212, 175, 55, .12), rgba(212, 175, 55, .03));
+  border: 1px solid var(--gold-dim); border-radius: 4px; cursor: pointer;
+  text-shadow: 0 0 14px rgba(212, 175, 55, .4);
+  box-shadow: inset 0 0 18px rgba(212, 175, 55, .06);
   transition: box-shadow .15s, background .15s, transform .08s;
 }}
-button:hover:not(:disabled) {{ background: linear-gradient(180deg, rgba(0, 255, 65, .14), rgba(0, 255, 65, .04)); box-shadow: 0 0 26px rgba(0, 255, 65, .25), inset 0 0 24px rgba(0, 255, 65, .12); }}
+button:hover:not(:disabled) {{ background: linear-gradient(180deg, rgba(212, 175, 55, .2), rgba(212, 175, 55, .06)); box-shadow: 0 0 26px rgba(212, 175, 55, .3), inset 0 0 24px rgba(212, 175, 55, .12); }}
 button:active:not(:disabled) {{ transform: translateY(1px); }}
 button:disabled {{ opacity: .55; cursor: wait; }}
 #result {{
   margin-top: 1.3rem; padding: 1.5rem 1rem; text-align: center;
-  background: rgba(0, 20, 8, .5); border: 1px solid var(--line);
+  background: rgba(20, 16, 40, .5); border: 1px solid var(--line);
   border-radius: 4px; {result_style}
 }}
-.result-label {{ font-size: .7rem; letter-spacing: .3em; text-transform: uppercase; color: var(--brass); }}
+.result-label {{ font-size: .72rem; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); }}
 .big {{
+  font-family: Didot, "Bodoni MT", "Playfair Display", Georgia, serif;
+  font-style: italic;
   font-size: 1.7rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4;
-  color: var(--phos);
-  text-shadow: 0 0 8px rgba(0, 255, 65, .8), 0 0 30px rgba(0, 255, 65, .45), 0 0 80px rgba(0, 255, 65, .25);
+  color: var(--aurora);
+  text-shadow: 0 0 8px rgba(141, 255, 176, .7), 0 0 30px rgba(141, 255, 176, .35);
 }}
 .big.neutral {{
-  color: var(--brass);
-  text-shadow: 0 0 8px rgba(201, 162, 39, .8), 0 0 30px rgba(201, 162, 39, .4);
+  color: var(--moon);
+  text-shadow: 0 0 8px rgba(232, 228, 216, .7), 0 0 30px rgba(232, 228, 216, .3);
 }}
 .big.negative {{
-  color: #ff6b5e;
+  color: var(--ember);
   text-shadow: 0 0 8px rgba(255, 107, 94, .8), 0 0 30px rgba(255, 107, 94, .4);
 }}
-.result-meta {{ margin-top: .5rem; font-size: .78rem; color: var(--dim); }}
-.hint {{ color: var(--faint); font-size: .85rem; }}
+.result-meta {{ margin-top: .5rem; font-size: .82rem; font-style: italic; color: var(--dim); }}
+.hint {{ color: var(--faint); font-size: .9rem; font-style: italic; }}
 .note {{ color: var(--dim); font-size: .85em; }}
-code {{ color: var(--brass); background: rgba(201, 162, 39, .08); border: 1px solid rgba(201, 162, 39, .25); border-radius: 4px; padding: .1em .4em; font-size: .85em; }}
+code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--gold); background: rgba(212, 175, 55, .08); border: 1px solid rgba(212, 175, 55, .25); border-radius: 4px; padding: .1em .4em; font-size: .85em; }}
 </style>
 </head>
 <body>
 <canvas id="stars" aria-hidden="true"></canvas>
+<div class="moon" aria-hidden="true"></div>
 <div class="vignette" aria-hidden="true"></div>
 <div class="card">
 <div class="overline">ENTROPY ORACLE &middot; MMXXVI</div>
@@ -432,7 +436,7 @@ code {{ color: var(--brass); background: rgba(201, 162, 39, .08); border: 1px so
 }})();
 function scramble(el, final) {{
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {{ el.textContent = final; return; }}
-  const glyphs = '0123456789ABCDEF$#*+=';
+  const glyphs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz·*~';
   const total = 22;
   let frame = 0;
   const timer = setInterval(() => {{
