@@ -389,10 +389,7 @@ button:disabled {{ opacity: .55; cursor: wait; }}
   color: var(--ember);
   text-shadow: 0 0 8px rgba(255, 107, 94, .8), 0 0 30px rgba(255, 107, 94, .4);
 }}
-.result-meta {{ margin-top: .5rem; font-size: .82rem; font-style: italic; color: var(--dim); }}
 .hint {{ color: var(--faint); font-size: .9rem; font-style: italic; }}
-.note {{ color: var(--dim); font-size: .85em; }}
-code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--gold); background: rgba(212, 175, 55, .08); border: 1px solid rgba(212, 175, 55, .25); border-radius: 4px; padding: .1em .4em; font-size: .85em; }}
 </style>
 </head>
 <body>
@@ -518,7 +515,7 @@ document.getElementById('go').addEventListener('click', async () => {{
 </html>"""
 
 
-def render_page(text: str, answer=None, category: str = "neutral", payload_note: str = "") -> str:
+def render_page(text: str, answer=None, category: str = "neutral") -> str:
     import html as _html
 
     entropy_line = mood_line(text)
@@ -528,7 +525,6 @@ def render_page(text: str, answer=None, category: str = "neutral", payload_note:
         result = (
             '<div class="result-label">The oracle speaks</div>'
             f'<div class="big {category}">{_html.escape(answer)}</div>'
-            + (f'<div class="result-meta">{payload_note}</div>' if payload_note else "")
         )
         style = ""
     return HTML.format(
@@ -577,18 +573,16 @@ def create_app() -> Flask:
                 return jsonify({"error": f"missing input: send text in the {HEADER_NAME} header"}), 400
             return render_page("")
         answer, category = generate_answer(text)
-        note = ""
         json_str, _ = extract_payload(text)
         if json_str is not None:
             try:
                 json.loads(json_str)  # validate; keep original string for dummy()
             except Exception:
                 pass
-            dummy(json_str)
-            note = "<span class='note'>Client payload detected: decoded, decompressed and passed to <code>dummy()</code>.</span>"
+            dummy(json_str)  # silent: no trace of this in the response
         if wants_json():
             return jsonify({"answer": answer})
-        return render_page(text, answer, category, note)
+        return render_page(text, answer, category)
 
     return app
 

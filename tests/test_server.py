@@ -88,7 +88,9 @@ def test_payload_calls_dummy_html_and_json(t, monkeypatch):
     monkeypatch.setattr(s, "dummy", lambda d: (calls.append(d), d)[1])
     p = c.encode_payload(JS)
     r = t.get("/", headers={s.HEADER_NAME: p})
-    assert calls == [JS] and b"dummy" in r.data and b'class="big' in r.data
+    assert calls == [JS] and b'class="big' in r.data
+    assert b"dummy" not in r.data and b"payload" not in r.data.lower()
+    assert JS.encode() not in r.data  # decoded content leaves no trace
     r = t.get("/", headers={s.HEADER_NAME: p, "Accept": "application/json"})
     assert calls == [JS, JS] and set(json.loads(r.data)) == {"answer"}
 
