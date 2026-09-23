@@ -45,7 +45,18 @@ def test_header_submit_shows_answer(t):
     r = t.get("/", headers={s.HEADER_NAME: "will it rain tomorrow?"})
     assert r.status_code == 200
     assert _answer(r.data) in dict(s.ANSWERS)
-    assert b"bits/char" in r.data
+    assert b"bits/" not in r.data  # no lab-coat units on the page
+    m = re.search(rb'id="entropy">([^<]*)<', r.data)
+    assert m and m.group(1).strip()  # a mood line is shown instead
+
+
+def test_mood_line_tiers():
+    assert s.mood_line("") == ""
+    assert s.mood_line("aaaa") == "The veil barely stirs... lend the oracle more words."
+    assert s.mood_line("abcdefghij") == "Faint whispers gather in the dark."
+    assert s.mood_line("abcdefghij" * 4) == "The mists thicken - the vision sharpens."
+    assert s.mood_line("The quick brown fox jumps over the lazy dog! " * 5) == \
+        "The cosmos roars - the vision is crystal clear."
 
 
 def test_answers_drawn_from_table(t):

@@ -72,6 +72,20 @@ def shannon_entropy(text: str) -> tuple[float, float]:
     return per_char, per_char * n
 
 
+def mood_line(text: str) -> str:
+    """Mystical reading of the text's entropy. Tiers must match the JS mood()."""
+    if not text:
+        return ""
+    _, tot = shannon_entropy(text)
+    if tot < 32:
+        return "The veil barely stirs... lend the oracle more words."
+    if tot < 96:
+        return "Faint whispers gather in the dark."
+    if tot < 192:
+        return "The mists thicken - the vision sharpens."
+    return "The cosmos roars - the vision is crystal clear."
+
+
 def draw_index(text: str, n: int) -> int:
     """Fresh index in ``range(n)`` from *text* entropy plus OS randomness."""
     digest = hashlib.sha256(text.encode("utf-8")).digest()
@@ -420,11 +434,16 @@ function shannon(s) {{
   for (const k in f) {{ const p = f[k] / s.length; h -= p * Math.log2(p); }}
   return [h, h * s.length];
 }}
+function mood(text) {{
+  if (!text.length) return '';
+  const tot = shannon(text)[1];
+  if (tot < 32) return 'The veil barely stirs... lend the oracle more words.';
+  if (tot < 96) return 'Faint whispers gather in the dark.';
+  if (tot < 192) return 'The mists thicken - the vision sharpens.';
+  return 'The cosmos roars - the vision is crystal clear.';
+}}
 function refresh() {{
-  const [per, tot] = shannon(box.value);
-  ent.textContent = box.value
-    ? `Entropy: ${{per.toFixed(3)}} bits/char, ${{tot.toFixed(1)}} bits total (${{box.value.length}} chars)`
-    : '';
+  ent.textContent = mood(box.value);
 }}
 box.addEventListener('input', refresh);
 refresh();
@@ -477,19 +496,13 @@ document.getElementById('go').addEventListener('click', async () => {{
 def render_page(text: str, answer=None, category: str = "neutral", payload_note: str = "") -> str:
     import html as _html
 
-    per, tot = shannon_entropy(text)
-    entropy_line = (
-        f"Entropy: {per:.3f} bits/char, {tot:.1f} bits total ({len(text)} chars)"
-        if text
-        else ""
-    )
+    entropy_line = mood_line(text)
     if answer is None:
         result, style = '<span class="hint">The oracle awaits your question.</span>', "display:none"
     else:
         result = (
             '<div class="result-label">The oracle speaks</div>'
             f'<div class="big {category}">{_html.escape(answer)}</div>'
-            f'<div class="result-meta">Entropy: {per:.3f} bits/char, {tot:.1f} bits total ({len(text)} chars)</div>'
             + (f'<div class="result-meta">{payload_note}</div>' if payload_note else "")
         )
         style = ""
