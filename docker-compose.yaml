@@ -1,0 +1,18 @@
+services:
+  oracle:
+    image: ghcr.io/thywolf/exfoliator:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-5000}:${PORT:-5000}"
+    environment:
+      PORT: "${PORT:-5000}"
+      ENTROPY_PATH: "${ENTROPY_PATH:-/}"
+      PAYLOAD_SECRET: "${PAYLOAD_SECRET:-}"
+      TZ: "${TZ:-Europe/Warsaw}"
+      GUNICORN_CMD_ARGS: "${GUNICORN_CMD_ARGS:---workers=2 --threads=4 --worker-class=gthread --timeout=30 --graceful-timeout=30 --access-logfile=- --error-logfile=- --capture-output}"
+    volumes:
+      - type: bind
+        source: "${HANDLERS_FILE:-./server/handlers.py}"
+        target: /app/server/handlers.py
+        read_only: true

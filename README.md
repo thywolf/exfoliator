@@ -1,9 +1,9 @@
 # Entropy Oracle
 
 Ask a question, consult the oracle. A tiny Flask web app that reads the
-Shannon entropy of your words and answers with a freshly drawn fortune —
-plus a compressed-payload channel that lets a Python client smuggle a JSON
-document to the server inside a normal-looking oracle request.
+Shannon entropy of your words and answers with a daily, question-anchored
+fortune — plus a compressed-payload channel that lets a Python client smuggle
+a JSON document to the server inside a normal-looking oracle request.
 
 ## How it works
 
@@ -13,9 +13,9 @@ document to the server inside a normal-looking oracle request.
    text's entropy (no numbers, just mood).
 2. Click "Ask the oracle". The browser re-issues a GET with your text in the
    `X-Entropy-Input` header — never in URL query parameters.
-3. The server mixes your text with fresh OS randomness, draws an answer from
-   its table (20 positive / 10 neutral / 10 negative), and returns the same
-   page with the answer revealed.
+3. The server normalizes your text into sorted unique words, combines that
+   key with the current local day, and draws the same daily answer from its
+   table (20 positive / 10 neutral / 10 negative).
 
 **Payload flow (Python client):**
 
@@ -58,14 +58,44 @@ import client.client as client
 answer = client.main('{"hello": "world"}')
 ```
 
+## Container
+
+Pushes to `master` and `v*` tags publish a multi-architecture image to
+`ghcr.io/thywolf/exfoliator` through GitHub Actions. The default deployment is
+defined in `docker-compose.yaml`:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Portainer can deploy the repository directly and use `docker-compose.yaml` as
+the stack Compose path. Its stack environment variables can override every
+default, including `IMAGE_TAG`, `HOST_PORT`, `PORT`, `ENTROPY_PATH`,
+`PAYLOAD_SECRET`, `TZ`, and `GUNICORN_CMD_ARGS`. The first GHCR package is
+private by default; make it public for anonymous pulls or configure registry
+credentials in Portainer.
+
+`HANDLERS_FILE` selects the host file mounted read-only at
+`/app/server/handlers.py`. It defaults to the repository's
+`server/handlers.py`, which works for local Compose and Portainer relative-path
+volumes. With Portainer CE, set it to an absolute path on the Docker host for
+a custom handler. Recreate the container after editing the file; it must be
+readable by the container's non-root user.
+
 ## Configuration
 
 | Var | Used by | Default | Meaning |
 | --- | ------- | ------- | ------- |
 | `ENTROPY_PATH` (`APP_PATH`/`BASE_PATH`/`ROUTE_PATH` aliases) | server | `/` | endpoint path |
-| `HOST`, `PORT` | server | `127.0.0.1:5000` | bind address |
+| `HOST`, `PORT` | server | `127.0.0.1:5000` locally, `:5000` in the container | bind address |
 | `SERVER_URL` | client | `http://127.0.0.1:5000` | server base URL |
 | `PAYLOAD_SECRET` | both | unset (layer off) | secret word for the scramble layer; must match on both sides |
+| `IMAGE_TAG` | Compose | `latest` | GHCR image tag |
+| `HOST_PORT` | Compose | `5000` | published host port |
+| `HANDLERS_FILE` | Compose | `./server/handlers.py` | host handler file mounted into the container |
+| `GUNICORN_CMD_ARGS` | container | two workers, four threads | Gunicorn process and logging configuration |
+| `TZ` | both | `Europe/Warsaw` in Compose | local calendar day used by the oracle |
 
 ## Custom logic
 
@@ -89,6 +119,9 @@ The call leaves no trace in the HTTP response.
 - `server/handlers.py` — user-editable `dummy()` payload hook.
 - `client/client.py` — importable sender (`client.main(json_string, ...)`).
 - `client/example.py` — runnable demo incl. the 2048-byte showcase.
+- `Dockerfile` — minimal multi-stage production image.
+- `docker-compose.yaml` — Portainer-ready stack using the published image.
+- `.github/workflows/container.yml` — tests, multi-arch build, GHCR publish, attestation.
 - `tests/` — pytest suite.
 
 ```bash
