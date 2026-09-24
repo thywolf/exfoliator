@@ -13,7 +13,8 @@ Payload interaction (from client/client.py):
   Identical HTTP round-trip. If the header text starts with a base62 checksum
   word matching the CRC32 of the remainder (base63 body, tolerating stripped
   trailing spaces), the body is base63-decoded, decompressed (zlib/bz2/lzma/raw
-  trial) and the resulting JSON string is passed to ``dummy()``.
+  trial) and the resulting JSON string is passed to ``dummy()``
+  (see ``server/handlers.py`` — user logic lives there, not here).
   If ``PAYLOAD_SECRET`` is set, an XOR-descrambled variant (SHA-256-CTR
   keystream, same secret client-side) is tried too; the first valid JSON wins.
   The returned webpage is identical to the regular web flow.
@@ -35,6 +36,8 @@ from collections import Counter
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
+from .handlers import dummy
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 load_dotenv()  # also honour root .env / environment
 
@@ -53,16 +56,9 @@ CHECKSUM_LEN = 6  # ceil(32 / log2(62)); CRC32 fits in 6 base62 chars
 MAX_STRIPPED_SPACES = 8  # trailing spaces HTTP may trim -> recover via checksum
 
 
-def dummy(data: str):
-    """Further processing hook for decoded client payloads (not covered).
-
-    Receives the final decompressed JSON string. Currently logs and returns it.
-    """
-    print(f"[dummy] received payload json ({len(data)} chars): {data[:200]}")
-    return data
-
-
 # ------------------------------------------------------------- entropy/random
+# NOTE: decoded client payloads are handed to ``dummy()`` from
+# ``server/handlers.py`` — implement your logic there, not here.
 def shannon_entropy(text: str) -> tuple[float, float]:
     """Return (bits_per_char, total_bits) Shannon entropy of *text*."""
     if not text:
