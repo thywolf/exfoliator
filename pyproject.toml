@@ -1,7 +1,7 @@
 [project]
 name = "exfoliator"
 version = "0.1.0"
-description = "Entropy-based random number web app with header-transported compressed payload (server + client)"
+description = "Entropy oracle web app with header-transported compressed payload (server + client)"
 requires-python = ">=3.10"
 dependencies = [
   "flask>=3.0",
