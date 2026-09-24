@@ -30,11 +30,21 @@ def _answer(html: bytes) -> str:
 def test_initial_page(t):
     r = t.get("/")
     assert r.status_code == 200
-    for marker in (b'id="box"', b'id="go"', b'id="result"', b'id="stars"'):
+    markers = (
+        b'id="box"',
+        b'id="go"',
+        b'id="result"',
+        b'id="stars"',
+        b'id="character-count"',
+    )
+    for marker in markers:
         assert marker in r.data
     assert b'class="moon"' in r.data
+    assert b'class="prompt-panel"' in r.data
+    assert b"The oracle awaits your question." in r.data
     assert b'rel="icon"' in r.data and b"data:image/svg+xml" in r.data
     assert b'class="big' not in r.data  # no answer before first submit
+    assert b"display:none" not in r.data
     assert r.headers["Cache-Control"].startswith("no-store")
 
 
@@ -61,9 +71,25 @@ def test_mood_line_tiers():
         "The cosmos roars - the vision is crystal clear."
 
 
-def test_answers_drawn_from_table(t):
-    seen = {_answer(t.get("/", headers={s.HEADER_NAME: "same"}).data) for _ in range(60)}
-    assert seen <= set(dict(s.ANSWERS)) and len(seen) > 1
+def test_answers_are_stable_for_the_day(t, monkeypatch):
+    monkeypatch.setattr(s, "day_anchor", lambda: "2026-09-24")
+    first = _answer(t.get("/", headers={s.HEADER_NAME: "Will it rain tomorrow?"}).data)
+    second = _answer(t.get("/", headers={s.HEADER_NAME: "rain, IT will tomorrow?!"}).data)
+    assert first == second
+
+
+def test_stable_question_key():
+    assert s.stable_question_key("Rain 42, rain!") == "42 rain"
+    assert s.stable_question_key("CAFÉ café --") == "café"
+    assert s.stable_question_key("___ --") == ""
+
+
+def test_day_anchor_changes_draw(monkeypatch):
+    monkeypatch.setattr(s, "day_anchor", lambda: "2026-09-24")
+    first = s.draw_index("same question", 1_000_003)
+    assert first == s.draw_index("same question", 1_000_003)
+    monkeypatch.setattr(s, "day_anchor", lambda: "2026-09-25")
+    assert s.draw_index("same question", 1_000_003) != first
 
 
 def test_post_fallback_multiline_unicode(t):
@@ -139,11 +165,11 @@ def test_answer_table_shape():
     assert len({t for t, _ in s.ANSWERS}) == 40  # all phrasings unique
 
 
-def test_generate_answer_valid():
+def test_generate_answer_valid(monkeypatch):
+    monkeypatch.setattr(s, "day_anchor", lambda: "2026-09-24")
     table = dict(s.ANSWERS)
-    seen = set()
-    for _ in range(60):
-        answer, category = s.generate_answer("x")
-        assert table[answer] == category
-        seen.add(answer)
-    assert len(seen) > 1
+    first = s.generate_answer("x")
+    second = s.generate_answer("X x!")
+    assert first == second
+    answer, category = first
+    assert table[answer] == category

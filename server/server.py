@@ -6,8 +6,9 @@ Web interaction (regular use):
   2. User types a question; JS shows Shannon entropy of the text live.
   3. User clicks "Ask the oracle"; JS re-issues GET with the
      textarea content in the ``X-Entropy-Input`` header (no URL query params).
-  4. Server mixes the text with fresh OS randomness (``secrets``), draws a
-     fresh oracle answer on every click, and returns the SAME page with it shown.
+  4. Server normalizes the question into sorted unique words, combines that
+     key with the current local calendar day, and draws the same daily oracle
+     answer for equivalent questions.
 
 Payload interaction (from client/client.py):
   Identical HTTP round-trip. If the header text starts with a base62 checksum
@@ -29,9 +30,10 @@ import json
 import lzma
 import math
 import os
-import secrets
+import re
 import zlib
 from collections import Counter
+from datetime import date
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
@@ -56,7 +58,7 @@ CHECKSUM_LEN = 6  # ceil(32 / log2(62)); CRC32 fits in 6 base62 chars
 MAX_STRIPPED_SPACES = 8  # trailing spaces HTTP may trim -> recover via checksum
 
 
-# ------------------------------------------------------------- entropy/random
+# ---------------------------------------------------------- entropy/temporal
 # NOTE: decoded client payloads are handed to ``dummy()`` from
 # ``server/handlers.py`` — implement your logic there, not here.
 def shannon_entropy(text: str) -> tuple[float, float]:
@@ -82,11 +84,20 @@ def mood_line(text: str) -> str:
     return "The cosmos roars - the vision is crystal clear."
 
 
+def stable_question_key(text: str) -> str:
+    words = re.findall(r"[^\W_]+", text.casefold())
+    return " ".join(sorted(set(words)))
+
+
+def day_anchor() -> str:
+    return date.today().isoformat()
+
+
 def draw_index(text: str, n: int) -> int:
-    """Fresh index in ``range(n)`` from *text* entropy plus OS randomness."""
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    mixed = hashlib.sha256(digest + secrets.token_bytes(32)).digest()
-    return int.from_bytes(mixed, "big") % n
+    """Stable index in ``range(n)`` for *text* on the current local day."""
+    material = f"{day_anchor()}\0{stable_question_key(text)}".encode("utf-8")
+    digest = hashlib.sha256(material).digest()
+    return int.from_bytes(digest, "big") % n
 
 
 # Original oracle phrasing (10 favorable / 5 neutral / 5 unfavorable).
@@ -136,7 +147,7 @@ ANSWERS: tuple[tuple[str, str], ...] = (
 
 
 def generate_answer(text: str) -> tuple[str, str]:
-    """Draw a fresh (answer, category) pair with *text* as entropy source."""
+    """Return today's (answer, category) pair for *text*."""
     return ANSWERS[draw_index(text, len(ANSWERS))]
 
 
@@ -281,126 +292,285 @@ HTML = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entropy Oracle</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23d4af37'/%3E%3Ccircle cx='21' cy='12' r='10' fill='%23050510'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#07090d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2307090d'/%3E%3Cpath d='M22.8 6.8a10 10 0 1 0 2.4 15.1 8.5 8.5 0 0 1-2.4-15.1Z' fill='%23e6c779'/%3E%3C/svg%3E">
 <style>
 :root {{
-  --bg: #050510;
-  --card: rgba(10, 10, 24, .88);
-  --ink: #e9e6da; --dim: #9a94a8; --faint: #57536a;
-  --gold: #d4af37; --gold-dim: #8a6f1f; --copper: #b87333;
-  --aurora: #8dffb0; --ember: #ff6b5e; --moon: #e8e4d8;
-  --line: #2a2640; --field: #07070f;
+  --bg: #07090d;
+  --surface: rgba(14, 17, 23, .9);
+  --surface-deep: rgba(7, 9, 13, .82);
+  --ink: #f3f0e7;
+  --muted: #a5a8ae;
+  --faint: #686e78;
+  --gold: #e6c779;
+  --gold-deep: #9d7d37;
+  --line: rgba(240, 232, 213, .12);
+  --aurora: #9ce7b5;
+  --moon: #e8e5dc;
+  --ember: #ff8b80;
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --serif: Didot, "Bodoni MT", "Iowan Old Style", Georgia, serif;
 }}
 * {{ box-sizing: border-box; }}
-html, body {{ margin: 0; padding: 0; }}
+html {{ min-height: 100%; background: var(--bg); }}
 body {{
-  min-height: 100vh; padding: 2.5rem 1rem 3rem;
-  font-family: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
-  background:
-    radial-gradient(1100px 650px at 78% -10%, rgba(88, 40, 140, .32), transparent 60%),
-    radial-gradient(900px 650px at 8% 108%, rgba(20, 90, 110, .2), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
+  min-height: 100vh; min-height: 100dvh; margin: 0;
+  padding: clamp(1rem, 4vw, 3.5rem) 1rem;
+  display: flex; align-items: center; justify-content: center;
+  overflow-x: hidden;
+  font-family: var(--sans);
   color: var(--ink);
-  display: flex; align-items: flex-start; justify-content: center;
+  background:
+    radial-gradient(900px 620px at 84% 8%, rgba(94, 65, 139, .22), transparent 68%),
+    radial-gradient(760px 620px at 8% 92%, rgba(25, 92, 101, .17), transparent 66%),
+    var(--bg);
 }}
-#stars {{ position: fixed; inset: 0; width: 100%; height: 100%; opacity: .8; z-index: 0; }}
+body::before {{
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black, transparent 76%);
+  -webkit-mask-image: radial-gradient(circle at center, black, transparent 76%);
+}}
+#stars {{ position: fixed; inset: 0; width: 100%; height: 100%; opacity: .58; z-index: 0; }}
 .moon {{
-  position: fixed; top: 6%; right: 9%; width: 110px; height: 110px; z-index: 0;
+  position: fixed; top: clamp(2rem, 8vh, 6rem); right: clamp(1rem, 8vw, 8rem);
+  width: clamp(84px, 10vw, 144px); aspect-ratio: 1; z-index: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #fdfbf0, #d9d4c0 60%, #a8a294 100%);
-  box-shadow: 0 0 40px rgba(253, 251, 240, .35), 0 0 120px rgba(212, 175, 55, .25);
-  opacity: .9;
+  background: radial-gradient(circle at 34% 31%, #fffdf5 0, #d9d4c6 54%, #8f8c86 100%);
+  box-shadow: 0 0 50px rgba(255, 251, 229, .18), 0 0 150px rgba(230, 199, 121, .12);
+  opacity: .78;
+}}
+.moon::before {{
+  content: ""; position: absolute; inset: -34%; border: 1px solid rgba(230, 199, 121, .14);
+  border-radius: 50%; transform: rotate(-18deg) scaleY(.38);
+}}
+.moon::after {{
+  content: ""; position: absolute; width: 7px; height: 7px; right: -47%; top: 45%;
+  border-radius: 50%; background: var(--gold);
+  box-shadow: 0 0 16px rgba(230, 199, 121, .9);
 }}
 .vignette {{
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 32%, transparent 35%, rgba(0, 0, 0, .78) 100%);
+  background: radial-gradient(ellipse at center, transparent 28%, rgba(0, 0, 0, .58) 100%);
 }}
 .card {{
-  position: relative; z-index: 2; width: 100%; max-width: 660px;
-  background: var(--card);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(212, 175, 55, .45); border-radius: 6px;
-  padding: 2rem 2rem 1.6rem;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8), 0 0 60px rgba(88, 40, 140, .25), 0 30px 80px rgba(0, 0, 0, .65);
+  position: relative; z-index: 2; width: 100%; max-width: 880px;
+  overflow: hidden; isolation: isolate;
+  background: var(--surface);
+  border: 1px solid var(--line); border-radius: 26px;
+  box-shadow: 0 34px 100px rgba(0, 0, 0, .58), 0 0 0 1px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(24px) saturate(120%); -webkit-backdrop-filter: blur(24px) saturate(120%);
 }}
 .card::before {{
-  content: ""; display: block; height: 3px; margin: -2rem -2rem 1.6rem;
-  background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--copper) 50%, var(--gold) 80%, transparent);
+  content: ""; position: absolute; inset: 0 0 auto; height: 1px; z-index: 5;
+  background: linear-gradient(90deg, transparent 5%, rgba(230, 199, 121, .9) 50%, transparent 95%);
 }}
-.overline {{ font-size: .68rem; letter-spacing: .35em; color: var(--gold); margin-bottom: .6rem; }}
+.masthead {{
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 1.25rem 1.75rem; border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, .012);
+}}
+.brand {{ display: flex; align-items: center; gap: .8rem; }}
+.brand-mark {{
+  position: relative; flex: 0 0 auto; width: 38px; height: 38px;
+  border: 1px solid rgba(230, 199, 121, .45); border-radius: 50%;
+  box-shadow: inset 0 0 18px rgba(230, 199, 121, .06);
+}}
+.brand-mark::before {{
+  content: ""; position: absolute; width: 19px; height: 19px; top: 8px; left: 8px;
+  border-radius: 50%; background: var(--gold);
+  box-shadow: 0 0 14px rgba(230, 199, 121, .35);
+}}
+.brand-mark::after {{
+  content: ""; position: absolute; width: 17px; height: 17px; top: 6px; left: 14px;
+  border-radius: 50%; background: #0d1016;
+}}
+.brand-name {{ font-size: .72rem; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; }}
+.brand-meta {{ margin-top: .25rem; color: var(--faint); font-size: .62rem; letter-spacing: .15em; text-transform: uppercase; }}
+.signal {{
+  display: flex; align-items: center; gap: .5rem; white-space: nowrap;
+  color: var(--muted); font-size: .64rem; letter-spacing: .16em; text-transform: uppercase;
+}}
+.signal::before {{
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--aurora);
+  box-shadow: 0 0 10px rgba(156, 231, 181, .8);
+}}
+.prompt-panel {{
+  display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
+  gap: clamp(2rem, 5vw, 4.5rem); padding: clamp(2rem, 5vw, 3.7rem);
+}}
+.kicker {{
+  display: inline-flex; align-items: center; gap: .65rem; margin-bottom: 1.2rem;
+  color: var(--gold); font-size: .65rem; font-weight: 700; letter-spacing: .25em; text-transform: uppercase;
+}}
+.kicker::before {{ content: ""; width: 1.8rem; height: 1px; background: currentColor; }}
 h1 {{
-  margin: 0 0 1.3rem;
-  font-family: Didot, "Bodoni MT", "Playfair Display", Georgia, serif;
-  font-size: 2.1rem; font-weight: 700; letter-spacing: .01em; color: #f5edd6;
-  text-shadow: 0 0 24px rgba(212, 175, 55, .35);
+  margin: 0; font-family: var(--serif); font-size: clamp(3rem, 6vw, 4.8rem);
+  font-weight: 400; line-height: .94; letter-spacing: -.045em; color: #f7f3e9;
 }}
-label {{ display: block; font-size: .78rem; letter-spacing: .24em; text-transform: uppercase; color: var(--dim); margin-bottom: .45rem; }}
+h1 em {{ display: block; color: var(--gold); font-weight: 400; }}
+.intro p {{
+  max-width: 24rem; margin: 1.5rem 0 0; color: var(--muted);
+  font-family: var(--serif); font-size: 1rem; line-height: 1.65;
+}}
+.form-column {{ min-width: 0; align-self: center; }}
+.label-row {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .7rem; }}
+label {{ color: var(--ink); font-size: .7rem; font-weight: 650; letter-spacing: .18em; text-transform: uppercase; }}
+#character-count {{ color: var(--faint); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; }}
 textarea {{
-  width: 100%; min-height: 150px; resize: vertical;
-  font-family: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
-  font-size: 1rem; line-height: 1.7; color: var(--ink);
+  display: block; width: 100%; min-height: 178px; resize: vertical;
+  padding: 1.05rem 1.15rem; outline: none;
+  font-family: var(--serif); font-size: 1.08rem; line-height: 1.65; color: var(--ink);
   caret-color: var(--gold);
-  background: var(--field);
-  border: 1px solid var(--line); border-radius: 4px;
-  padding: .8rem .95rem; outline: none;
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, .7);
-  transition: border-color .15s, box-shadow .15s;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .025), transparent 45%), var(--surface-deep);
+  border: 1px solid var(--line); border-radius: 15px;
+  box-shadow: inset 0 1px 20px rgba(0, 0, 0, .32);
+  transition: border-color .2s, box-shadow .2s, background .2s;
 }}
-textarea:focus {{ border-color: var(--gold-dim); box-shadow: inset 0 0 30px rgba(0, 0, 0, .7), 0 0 0 1px rgba(212, 175, 55, .3), 0 0 22px rgba(212, 175, 55, .15); }}
-textarea::placeholder {{ color: var(--faint); font-style: italic; }}
-#entropy {{ margin-top: .55rem; font-size: .88rem; font-style: italic; color: var(--dim); min-height: 1.2em; }}
+textarea::placeholder {{ color: #666b74; font-style: italic; }}
+textarea:focus {{
+  border-color: rgba(230, 199, 121, .58);
+  box-shadow: inset 0 1px 20px rgba(0, 0, 0, .3), 0 0 0 3px rgba(230, 199, 121, .07);
+}}
+.entropy-row {{ display: flex; align-items: center; gap: .85rem; min-height: 3.25rem; margin-top: .8rem; }}
+.entropy-icon {{
+  position: relative; flex: 0 0 auto; width: 28px; height: 28px;
+  border: 1px solid rgba(230, 199, 121, .28); border-radius: 50%;
+}}
+.entropy-icon::before {{
+  content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--gold);
+  box-shadow: 0 0 12px rgba(230, 199, 121, .55);
+}}
+.entropy-icon::after {{
+  content: ""; position: absolute; inset: -5px; border: 1px solid rgba(230, 199, 121, .08); border-radius: 50%;
+}}
+.entropy-copy {{ min-width: 0; }}
+.entropy-kicker {{ display: block; margin-bottom: .2rem; color: var(--faint); font-size: .58rem; letter-spacing: .19em; text-transform: uppercase; }}
+#entropy {{ color: var(--muted); font-family: var(--serif); font-size: .88rem; font-style: italic; line-height: 1.35; }}
 button {{
-  margin-top: 1.1rem; width: 100%; padding: .9rem 1rem;
-  font-family: inherit; font-size: .95rem; font-weight: 700;
-  letter-spacing: .22em; text-transform: uppercase;
-  color: var(--gold);
-  background: linear-gradient(180deg, rgba(212, 175, 55, .12), rgba(212, 175, 55, .03));
-  border: 1px solid var(--gold-dim); border-radius: 4px; cursor: pointer;
-  text-shadow: 0 0 14px rgba(212, 175, 55, .4);
-  box-shadow: inset 0 0 18px rgba(212, 175, 55, .06);
-  transition: box-shadow .15s, background .15s, transform .08s;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  width: 100%; margin-top: 1.25rem; padding: 1rem 1.15rem 1rem 1.3rem;
+  color: #16120a; background: var(--gold); border: 0; border-radius: 12px;
+  font-family: var(--sans); font-size: .72rem; font-weight: 800; letter-spacing: .17em; text-transform: uppercase;
+  cursor: pointer; box-shadow: 0 12px 30px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .3);
+  transition: transform .18s, box-shadow .18s, background .18s;
 }}
-button:hover:not(:disabled) {{ background: linear-gradient(180deg, rgba(212, 175, 55, .2), rgba(212, 175, 55, .06)); box-shadow: 0 0 26px rgba(212, 175, 55, .3), inset 0 0 24px rgba(212, 175, 55, .12); }}
-button:active:not(:disabled) {{ transform: translateY(1px); }}
-button:disabled {{ opacity: .55; cursor: wait; }}
+button svg {{ width: 18px; height: 18px; flex: 0 0 auto; transition: transform .18s; }}
+button:hover:not(:disabled) {{ background: #f0d791; box-shadow: 0 15px 36px rgba(0, 0, 0, .3), 0 0 28px rgba(230, 199, 121, .12); transform: translateY(-1px); }}
+button:hover:not(:disabled) svg {{ transform: translateX(3px); }}
+button:active:not(:disabled) {{ transform: translateY(0); }}
+button:focus-visible, textarea:focus-visible {{ outline: 2px solid var(--gold); outline-offset: 3px; }}
+button:disabled {{ opacity: .62; cursor: wait; }}
+button.is-loading svg {{ animation: orbit .9s linear infinite; }}
 #result {{
-  margin-top: 1.3rem; padding: 1.5rem 1rem; text-align: center;
-  background: rgba(20, 16, 40, .5); border: 1px solid var(--line);
-  border-radius: 4px; {result_style}
+  position: relative; min-height: 152px; margin: 0 clamp(2rem, 5vw, 3.7rem) 2.5rem;
+  display: grid; place-items: center; overflow: hidden;
+  padding: 1.8rem; text-align: center;
+  background: radial-gradient(circle at 50% 110%, rgba(230, 199, 121, .1), transparent 52%), rgba(255, 255, 255, .018);
+  border: 1px solid var(--line); border-radius: 18px; {result_style}
 }}
-.result-label {{ font-size: .72rem; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); }}
+.result-label {{
+  display: flex; align-items: center; justify-content: center; gap: .8rem;
+  color: var(--gold); font-size: .61rem; font-weight: 700; letter-spacing: .24em; text-transform: uppercase;
+}}
+.result-label::before, .result-label::after {{ content: ""; width: 1.5rem; height: 1px; background: rgba(230, 199, 121, .35); }}
 .big {{
-  font-family: Didot, "Bodoni MT", "Playfair Display", Georgia, serif;
-  font-style: italic;
-  font-size: 1.7rem; font-weight: 700; letter-spacing: .02em; line-height: 1.4;
-  color: var(--aurora);
-  text-shadow: 0 0 8px rgba(141, 255, 176, .7), 0 0 30px rgba(141, 255, 176, .35);
+  max-width: 38rem; margin: .85rem auto 0;
+  font-family: var(--serif); font-size: clamp(1.7rem, 4vw, 2.65rem); font-weight: 400;
+  line-height: 1.2; letter-spacing: -.02em; color: var(--aurora);
+  text-shadow: 0 0 26px rgba(156, 231, 181, .22);
 }}
-.big.neutral {{
-  color: var(--moon);
-  text-shadow: 0 0 8px rgba(232, 228, 216, .7), 0 0 30px rgba(232, 228, 216, .3);
+.big.neutral {{ color: var(--moon); text-shadow: 0 0 26px rgba(232, 229, 220, .18); }}
+.big.negative {{ color: var(--ember); text-shadow: 0 0 26px rgba(255, 139, 128, .2); }}
+.hint {{ display: flex; align-items: center; gap: .7rem; margin-top: .9rem; color: var(--faint); font-family: var(--serif); font-size: .9rem; font-style: italic; }}
+.hint-mark {{ width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: var(--gold-deep); box-shadow: 0 0 9px rgba(230, 199, 121, .4); }}
+.card-footer {{
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+  padding: 1rem clamp(2rem, 5vw, 3.7rem); border-top: 1px solid var(--line);
+  color: var(--faint); font-size: .58rem; letter-spacing: .14em; text-transform: uppercase;
 }}
-.big.negative {{
-  color: var(--ember);
-  text-shadow: 0 0 8px rgba(255, 107, 94, .8), 0 0 30px rgba(255, 107, 94, .4);
+.card-footer span:last-child {{ color: rgba(230, 199, 121, .55); white-space: nowrap; }}
+::selection {{ color: #111; background: var(--gold); }}
+@keyframes orbit {{ to {{ transform: rotate(360deg); }} }}
+@media (max-width: 720px) {{
+  body {{ align-items: flex-start; padding: .8rem; }}
+  .moon {{ opacity: .28; }}
+  .card {{ border-radius: 20px; }}
+  .prompt-panel {{ grid-template-columns: 1fr; gap: 2rem; }}
+  .intro p {{ margin-top: 1rem; }}
+  .form-column {{ align-self: auto; }}
+  #result {{ margin: 0 1.5rem 1.5rem; }}
+  .card-footer {{ padding: 1rem 1.5rem; }}
 }}
-.hint {{ color: var(--faint); font-size: .9rem; font-style: italic; }}
+@media (max-width: 440px) {{
+  .masthead {{ padding: 1rem 1.2rem; }}
+  .brand-meta {{ display: none; }}
+  .signal {{ font-size: .57rem; }}
+  .prompt-panel {{ padding: 2.2rem 1.2rem; }}
+  h1 {{ font-size: 3.2rem; }}
+  textarea {{ min-height: 165px; }}
+  #result {{ margin: 0 1.2rem 1.2rem; padding: 1.5rem 1rem; }}
+  .card-footer {{ align-items: flex-start; flex-direction: column; gap: .45rem; padding: 1rem 1.2rem; }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+  *, *::before, *::after {{ scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }}
+}}
+@supports not (backdrop-filter: blur(1px)) {{
+  .card {{ background: #0e1117; }}
+}}
 </style>
 </head>
 <body>
 <canvas id="stars" aria-hidden="true"></canvas>
 <div class="moon" aria-hidden="true"></div>
 <div class="vignette" aria-hidden="true"></div>
-<div class="card">
-<div class="overline">ENTROPY ORACLE &middot; MMXXVI</div>
-<h1>Entropy Oracle</h1>
-<label for="box">Your question</label>
-<textarea id="box" placeholder="Ask your question, then consult the oracle...">{text}</textarea>
-<div id="entropy">{entropy_line}</div>
-<button id="go" type="button">Ask the oracle</button>
-<div id="result">{result_block}</div>
+<main class="card">
+<header class="masthead">
+<div class="brand">
+<span class="brand-mark" aria-hidden="true"></span>
+<div>
+<div class="brand-name">Entropy Oracle</div>
+<div class="brand-meta">Chamber of chance &middot; MMXXVI</div>
 </div>
+</div>
+<div class="signal">Signal open</div>
+</header>
+<section class="prompt-panel">
+<div class="intro">
+<div class="kicker">Beyond the possible</div>
+<h1>What does the<br><em>entropy say?</em></h1>
+<p>Form a question, trust the signal, and let the unseen decide.</p>
+</div>
+<div class="form-column">
+<div class="label-row">
+<label for="box">Pose your question</label>
+<span id="character-count">0 characters</span>
+</div>
+<textarea id="box" placeholder="What waits beyond the edge of possibility?" aria-describedby="entropy" spellcheck="true">{text}</textarea>
+<div class="entropy-row">
+<span class="entropy-icon" aria-hidden="true"></span>
+<div class="entropy-copy">
+<span class="entropy-kicker">Entropy reading</span>
+<div id="entropy">{entropy_line}</div>
+</div>
+</div>
+<button id="go" type="button">
+<span>Ask the oracle</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+<path d="M5 12h13M14 7l5 5-5 5"/>
+</svg>
+</button>
+</div>
+</section>
+<section id="result" aria-live="polite" aria-atomic="true">{result_block}</section>
+<footer class="card-footer">
+<span>The oracle's answer holds for the day. No question is stored.</span>
+<span>Entropy / 01</span>
+</footer>
+</main>
 <script>
 (function stars() {{
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -418,8 +588,7 @@ button:disabled {{ opacity: .55; cursor: wait; }}
     requestAnimationFrame(tick);
     if (document.hidden) return;
     t += 0.02;
-    ctx.fillStyle = '#040705';
-    ctx.fillRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, H);
     for (const q of pts) {{
       ctx.globalAlpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * q.s + q.p));
       ctx.fillStyle = q.r > 1.2 ? '#e8f5e9' : '#00b32e';
@@ -444,6 +613,7 @@ function scramble(el, final) {{
 }}
 const box = document.getElementById('box');
 const ent = document.getElementById('entropy');
+const count = document.getElementById('character-count');
 function shannon(s) {{
   if (!s.length) return [0, 0];
   const f = {{}};
@@ -462,6 +632,8 @@ function mood(text) {{
 }}
 function refresh() {{
   ent.textContent = mood(box.value);
+  const length = Array.from(box.value).length;
+  count.textContent = length + (length === 1 ? ' character' : ' characters');
 }}
 box.addEventListener('input', refresh);
 refresh();
@@ -484,15 +656,17 @@ async function fetchPage(v) {{
 }}
 document.getElementById('go').addEventListener('click', async () => {{
   const btn = document.getElementById('go');
+  const btnLabel = btn.querySelector('span');
   const res = document.getElementById('result');
   btn.disabled = true;
+  btn.classList.add('is-loading');
+  btnLabel.textContent = 'Reading the signal';
   try {{
     const r = await fetchPage(box.value);
     const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
     const newResult = doc.getElementById('result');
     if (newResult) {{
       res.innerHTML = newResult.innerHTML;
-      res.style.display = 'block';
       const big = res.querySelector('.big');
       if (big) scramble(big, big.textContent);
     }}
@@ -500,10 +674,11 @@ document.getElementById('go').addEventListener('click', async () => {{
     if (newEnt && newEnt.textContent) ent.textContent = newEnt.textContent;
     else refresh();
   }} catch (e) {{
-    res.style.display = 'block';
-    res.textContent = 'Request failed: ' + e;
+    res.textContent = 'The signal broke. Please try again.';
   }} finally {{
     btn.disabled = false;
+    btn.classList.remove('is-loading');
+    btnLabel.textContent = 'Ask the oracle';
   }}
 }});
 </script>
@@ -516,20 +691,23 @@ def render_page(text: str, answer=None, category: str = "neutral") -> str:
 
     entropy_line = mood_line(text)
     if answer is None:
-        result, style = '<span class="hint">The oracle awaits your question.</span>', "display:none"
+        result = (
+            '<div class="result-label">Oracle response</div>'
+            '<div class="hint"><span class="hint-mark" aria-hidden="true"></span>'
+            '<span>The oracle awaits your question.</span></div>'
+        )
     else:
         result = (
             '<div class="result-label">The oracle speaks</div>'
             f'<div class="big {category}">{_html.escape(answer)}</div>'
         )
-        style = ""
     return HTML.format(
         header=HEADER_NAME,
         form_field=FORM_FIELD,
         text=_html.escape(text),
         entropy_line=_html.escape(entropy_line),
         result_block=result,
-        result_style=style,
+        result_style="",
     )
 
 
