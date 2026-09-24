@@ -10,7 +10,7 @@ services:
       ENTROPY_PATH: "${ENTROPY_PATH:-/}"
       PAYLOAD_SECRET: "${PAYLOAD_SECRET:-}"
       TZ: "${TZ:-Europe/Warsaw}"
-      GUNICORN_CMD_ARGS: "${GUNICORN_CMD_ARGS:---workers=2 --threads=4 --worker-class=gthread --timeout=30 --graceful-timeout=30 --access-logfile=- --error-logfile=- --capture-output}"
+      GUNICORN_CMD_ARGS: "${GUNICORN_CMD_ARGS:---workers=2 --threads=4 --worker-class=gthread --timeout=30 --graceful-timeout=30 --access-logfile=- --error-logfile=- --capture-output --no-control-socket}"
     volumes:
       - type: bind
         source: "${HANDLERS_FILE:-./server/handlers.py}"

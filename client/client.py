@@ -26,6 +26,7 @@ import hashlib
 import json
 import lzma
 import os
+import urllib.parse
 import urllib.request
 import zlib
 
@@ -35,6 +36,7 @@ _B63 = [255] * 256  # byte -> base63 value, 255 = invalid (fast table decode)
 for _i, _ch in enumerate(ALPHABET63):
     _B63[ord(_ch)] = _i
 HEADER_NAME = "X-Entropy-Input"
+USER_AGENT = "Exfoliator/0.1"
 CHECKSUM_LEN = 6
 MAX_STRIPPED_SPACES = 8
 
@@ -234,18 +236,40 @@ def _server_path(path: str | None) -> str:
     return "/"
 
 
+def _request_url(server_url: str | None, path: str | None) -> str:
+    base = server_url or os.environ.get("SERVER_URL", "http://127.0.0.1:5000")
+    parsed = urllib.parse.urlsplit(base)
+    if parsed.query or parsed.fragment:
+        raise ValueError("server URL must not contain a query or fragment")
+    base_path = parsed.path
+    if path is not None:
+        endpoint = _server_path(path)
+        if base_path in ("", "/"):
+            target_path = endpoint
+        elif base_path.rstrip("/") == endpoint.rstrip("/"):
+            target_path = base_path
+        else:
+            target_path = base_path.rstrip("/") + "/" + endpoint.lstrip("/")
+    elif base_path not in ("", "/"):
+        target_path = base_path
+    else:
+        target_path = _server_path(None)
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, target_path, "", "")
+    )
+
+
 def send_payload(payload: str, server_url: str | None = None,
                  path: str | None = None, timeout: int = 15,
                  accept_json: bool = True) -> str:
-    """GET *server_url+path* with the payload in the header (no query params).
+    """GET the configured endpoint with the payload in its header.
 
     With ``accept_json=True`` (default) asks for ``Accept: application/json``
     and returns the server's oracle answer as str. With ``accept_json=False``
     returns the full webpage HTML (regular browser-style response).
     """
-    base = (server_url or os.environ.get("SERVER_URL", "http://127.0.0.1:5000")).rstrip("/")
-    url = base + _server_path(path)
-    headers = {HEADER_NAME: payload}
+    url = _request_url(server_url, path)
+    headers = {HEADER_NAME: payload, "User-Agent": USER_AGENT}
     if accept_json:
         headers["Accept"] = "application/json"
     req = urllib.request.Request(url, method="GET", headers=headers)

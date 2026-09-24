@@ -731,7 +731,7 @@ def create_app() -> Flask:
         resp.headers["Pragma"] = "no-cache"
         return resp
 
-    @app.route(path, methods=["GET", "POST"])
+    @app.route(path, methods=["GET", "POST"], strict_slashes=False)
     def index():
         # Header transport first (used by both browser JS and python client);
         # POST form field accepted as fallback (e.g. oversized headers). Never query params.

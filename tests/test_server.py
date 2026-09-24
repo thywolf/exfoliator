@@ -146,6 +146,7 @@ def test_custom_path(monkeypatch):
     monkeypatch.setenv("ENTROPY_PATH", "/random")
     t2 = s.create_app().test_client()
     assert t2.get("/random").status_code == 200
+    assert t2.get("/random/").status_code == 200
     assert t2.get("/").status_code == 404
 
 
