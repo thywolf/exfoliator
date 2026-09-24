@@ -2,8 +2,13 @@
 
 Ask a question, consult the oracle. A tiny Flask web app that reads the
 Shannon entropy of your words and answers with a daily, question-anchored
-fortune — plus a compressed-payload channel that lets a Python client smuggle
-a JSON document to the server inside a normal-looking oracle request.
+fortune. The same endpoint also carries a hidden channel: a Python client
+can smuggle a JSON document to the server inside a normal-looking oracle
+request.
+
+<p align="center">
+  <img src="docs/screenshot-answered.png" alt='Entropy Oracle page showing a question and the answer "The stars incline toward yes."' width="720">
+</p>
 
 ## How it works
 
@@ -23,8 +28,14 @@ Identical HTTP round-trip, but the header text is a compressed + encoded
 JSON document: `<6-char checksum> <base63 body>`. The server verifies the
 checksum, decodes and decompresses the body, hands the JSON string to
 `dummy()` in `server/handlers.py`, and answers exactly as in the browser
-flow. Callers sending `Accept: application/json` get back just
+flow. Callers sending `Accept: application/json` get back
 `{"answer": "..."}` instead of the HTML page.
+
+One constraint worth knowing: everything rides in a single request header,
+so payload size is capped by server and proxy header limits (often around
+8 KB). The browser JS retries oversized requests as a form POST; the Python
+client does not. Compressed JSON normally fits with room to spare, but keep
+documents modest.
 
 ## Quickstart
 
@@ -61,8 +72,9 @@ answer = client.main('{"hello": "world"}')
 ## Container
 
 Pushes to `master` and `v*` tags publish a multi-architecture image to
-`ghcr.io/thywolf/exfoliator` through GitHub Actions. The default deployment is
-defined in `docker-compose.yaml`:
+`ghcr.io/thywolf/exfoliator` through GitHub Actions. Manual runs from the
+Actions tab publish too. The default deployment is defined in
+`docker-compose.yaml`:
 
 ```bash
 docker compose pull
@@ -83,6 +95,22 @@ volumes. With Portainer CE, set it to an absolute path on the Docker host for
 a custom handler. Recreate the container after editing the file; it must be
 readable by the container's non-root user.
 
+## Security notes
+
+The oracle answers anyone who can reach it, and the payload channel is no
+exception. Worth knowing before you expose an instance:
+
+- Payloads are unauthenticated, and `PAYLOAD_SECRET` does not gate them. The
+  secret only obscures scrambled bodies; any visitor can hand `dummy()`
+  arbitrary JSON either way.
+- Replacing `dummy()` means writing code that untrusted internet input
+  reaches. Validate before acting, and never pass payload content to `eval`,
+  `exec`, or a shell.
+- The scramble layer is obfuscation, not encryption. Treat anything a client
+  sends as public.
+- There is no rate limiting. Put a reverse proxy in front if the instance
+  faces the internet.
+
 ## Configuration
 
 | Var | Used by | Default | Meaning |
@@ -95,13 +123,14 @@ readable by the container's non-root user.
 | `HOST_PORT` | Compose | `5000` | published host port |
 | `HANDLERS_FILE` | Compose | `./server/handlers.py` | host handler file mounted into the container |
 | `GUNICORN_CMD_ARGS` | container | two workers, four threads | Gunicorn process and logging configuration |
-| `TZ` | both | `Europe/Warsaw` in Compose | local calendar day used by the oracle |
+| `TZ` | server | `Europe/Warsaw` in Compose | local calendar day used by the oracle |
 
 ## Custom logic
 
 Decoded payloads land in `dummy()` in `server/handlers.py`. Edit that file
 to implement your own handling — `server/server.py` needs no changes.
-The call leaves no trace in the HTTP response.
+The call leaves no trace in the HTTP response. Read the security notes
+before shipping a real handler.
 
 ## Wire format (frozen)
 
@@ -123,6 +152,7 @@ The call leaves no trace in the HTTP response.
 - `docker-compose.yaml` — Portainer-ready stack using the published image.
 - `.github/workflows/container.yml` — tests, multi-arch build, GHCR publish, attestation.
 - `tests/` — pytest suite.
+- `AGENTS.md` — conventions and hard rules for coding agents.
 
 ```bash
 uv run pytest -q   # full suite, keep it green
